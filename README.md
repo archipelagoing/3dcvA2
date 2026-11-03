@@ -1,5 +1,15 @@
 # 3D Computer Vision — Assignment 2
 
+**The question tying it together:** ?? How can I use the difference between two
+views to work out depth, and how do I know when the result is reliable?
+
+**The tools:** 
+- Stereo geometry: connects depth to the shift between matching pixels.
+-  Census descriptors and - Hamming distance help find those matches; window
+aggregation and winner-take-all pick a disparity. The Teddy part tests matching
+on supplied images. The fish part tests whether I can set up the cameras and
+render images that make the same matching method work.
+
 For this assignment, I worked on stereo matching with the Teddy images and then
 used the fish point cloud from HW1 to make my own stereo pair. The idea was to
 figure out which pixels match between two views and use that shift to estimate depth.
@@ -15,6 +25,76 @@ what didn't, and what I learned from it.
 | [C. Checks, setup, and reflection](#c-checks-setup-and-reflection) | Both experiments | Verification, running the code, and lessons/questions |
 
 ## A. Teddy stereo
+
+**A1. Central question:** Given two images, how well can I find the same scene
+points using local brightness patterns, and what changes when I use bigger windows?
+
+**A2. Tool being tested: winner-take-all stereo using the census transform.**
+For each pixel in the left image, try several possible matches in the right
+image. Give each match a cost, then keep the disparity with the lowest cost.
+That is “winner-take-all”: each pixel independently chooses its best candidate.
+There is no extra rule forcing neighboring pixels to choose similar disparities.
+
+The census transform supplies the matching cost. It describes the pattern around
+a pixel using bits instead of comparing raw brightness values directly.
+
+**A3. The math, step by step**
+
+1. **Build a census descriptor.** For pixel $p=(x,y)$ and each neighbor offset
+   $q$ in a census window $N_c$, record whether the neighbor is darker than the
+   center. Leave out the center itself:
+
+   **Plain English:** Turn the light-and-dark pattern around a pixel into a string of 0s and 1s.
+
+   $$C_I(p)=\operatorname{concat}_{q\in N_c\setminus\{0\}}\mathbf{1}[I(p+q)<I(p)]$$
+
+   Here $\operatorname{concat}$ joins the bits into one descriptor. The indicator
+   $\mathbf{1}[\cdot]$ is 1 if the comparison is true and 0 otherwise. A 3 × 3
+   window gives 8 bits; a 7 × 7 window gives 48.
+
+2. **Score each possible disparity.** For candidate disparity $d$, compare the
+   left descriptor at $(x,y)$ with the right descriptor at $(x-d,y)$:
+
+   **Plain English:** Try a match and count how many bits disagree.
+
+   $$H(p,d)=\operatorname{popcount}\!\left(C_L(x,y)\;\operatorname{XOR}\;C_R(x-d,y)\right)$$
+
+   XOR marks differing bits; popcount counts them. This is the **Hamming distance**.
+   Fewer differing bits means a lower cost, although it does not guarantee the match is right.
+
+3. **Add support from nearby pixels.** Sum those costs over an aggregation
+   window $N_A$ centered at the left pixel:
+
+   **Plain English:** Ask nearby pixels to help score the match.
+
+   $$S(p,d)=\sum_{u\in N_A}H(p+u,d)$$
+
+   The census window builds each descriptor; the aggregation window combines
+   matching evidence. They are separate window sizes.
+
+4. **Let the lowest cost win.** Search the allowed disparity set $D$:
+
+   **Plain English:** Keep the shift with the fewest disagreements.
+
+   $$\hat d(p)=\underset{d\in D}{\arg\min}\;S(p,d)$$
+
+   For Teddy, $D=\{0,1,\ldots,63\}$. The implementation chooses the smaller
+   disparity on a tie and skips candidates whose required windows cross an image boundary.
+
+**A4. What is a disparity map?**
+A disparity map stores the estimated horizontal shift $\hat d(x,y)$ at each
+left-image pixel. If a point appears at column 100 on the left and column 80 on
+the right, its disparity is $100-80=20$ pixels. It stores a shift, not depth directly.
+For this rectified camera setup:
+
+**Plain English:** Measure how far the point moved sideways; a bigger shift means it is closer.
+
+$$d=x_L-x_R,\qquad Z=\frac{f_x B}{d}$$
+
+Here $f_x$ is horizontal focal length in pixels, $B$ is camera separation, and
+$Z$ is depth. Larger disparity means a closer point when $f_x$ and $B$ are fixed.
+The displayed maps make larger disparities brighter. Black may also mark invalid
+pixels, so it does not always mean a distant surface.
 
 **Problem 1 starts with two supplied photographs.** Here I built the census
 matcher, compared window sizes, measured error against the supplied ground truth,
@@ -145,6 +225,32 @@ as commented code. The required unfiltered results are preserved separately.
 
 ## B. Fish stereo
 
+**B1. Central question:** Can I choose two camera views of a known 3D scene so
+that the images are easy to match, and can I explain the disparities from the geometry?
+
+**B2. Tools being tested:** The pinhole camera model and rectified stereo geometry.
+The camera model projects 3D points into image pixels. Parallel cameras with the
+same calibration and a horizontal baseline put corresponding points on the same
+row. The relationship `d = fx × baseline / Z` tells me what disparities to expect.
+I then reuse the census/Hamming matcher from Teddy on the rendered pair.
+
+**B3. What are rectified images?**
+A stereo pair is rectified when corresponding scene points lie on the **same
+image row**. Then matching only has to search horizontally:
+
+**Plain English:** Look along the same row in the other picture.
+
+$$y_L=y_R,\qquad x_R=x_L-d$$
+
+For a point at left pixel $(100,50)$, search candidate right pixels along row 50,
+rather than searching the whole right image. A point must be visible in both
+views for a real correspondence to exist; rectification does not remove occlusions.
+
+Real camera images can be rectified by warping them using their calibration.
+For the fish scene, I generate rectified views directly: both cameras have the
+same orientation and intrinsics, and their centers differ only horizontally.
+They show different viewpoints; rectified does not mean identical.
+
 **Problem 2 starts with the 3D point cloud from HW1.** Here I had to create the
 left and right images first, which meant choosing the camera positions,
 calibration, resolution, and disparity range. Then I reused the Teddy matcher.
@@ -225,6 +331,16 @@ For grayscale, I used the assignment's weights:
 `round(0.30 R + 0.59 G + 0.11 B)`.
 
 ## C. Checks, setup, and reflection
+
+**C1. Central question:** How do I know the result is right, rather than just
+something that looks convincing or gets a lower score under a different set of rules?
+
+**C2. Tools used to check it:** Small examples with known answers, an independent
+brute-force matching calculation, projection checks, and bad-pixel error rates.
+The small examples check individual steps; the error rates compare final results
+on stated sets of pixels. Saving the inputs, settings, and commands makes those
+checks repeatable. This part checks the work from A and B rather than testing a
+third stereo method.
 
 The rest covers checks for both problems, how to run the code, what is left,
 and what I learned from the assignment.
