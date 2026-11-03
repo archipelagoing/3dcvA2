@@ -1,601 +1,281 @@
 # 3D Computer Vision — Assignment 2
 
-**The question tying it together:** ?? How can I use the difference between two
-views to work out depth, and how do I know when the result is reliable?
+**Main question:** How can I use two views to work out depth, and how do I know
+when the result is reliable?
 
-**The tools:** 
-- Stereo geometry: connects depth to the shift between matching pixels.
--  Census descriptors and - Hamming distance help find those matches; window
-aggregation and winner-take-all pick a disparity. The Teddy part tests matching
-on supplied images. The fish part tests whether I can set up the cameras and
-render images that make the same matching method work.
-
-For this assignment, I worked on stereo matching with the Teddy images and then
-used the fish point cloud from HW1 to make my own stereo pair. The idea was to
-figure out which pixels match between two views and use that shift to estimate depth.
-
-I started with the basic census method, tried different window sizes, and then
-tried three things to improve the results. This README goes through what worked,
-what didn't, and what I learned from it.
-
-| Part | Starting point | What I worked on |
-| --- | --- | --- |
-| [A. Teddy stereo](#a-teddy-stereo) | Supplied left/right images and ground truth | Matching, window comparisons, error rates, and refinements |
-| [B. Fish stereo](#b-fish-stereo) | HW1 colored point cloud | Camera geometry, rendering a stereo pair, and reusing the matcher |
-| [C. Bonus: planes and homography](#c-bonus-planes-and-homography) | Fish point cloud and fitted ground plane | RANSAC, overhead rendering, and a plane-induced warp |
-| [D. Checks, setup, and reflection](#d-checks-setup-and-reflection) | All experiments | Verification, running the code, and lessons/questions |
+I used the Teddy images to build a stereo matcher, then made a stereo pair from
+the fish point cloud from HW1. For the bonus, I found planes with RANSAC and used
+the ground plane to make a bird's-eye image warp.
 
 ## A. Teddy stereo
 
-**A1. Central question:** Given two images, how well can I find the same scene
-points using local brightness patterns, and what changes when I use bigger windows?
+**Question:** How well can local brightness patterns find the same point in two images?
 
-**A2. Tool being tested: winner-take-all stereo using the census transform.**
-For each pixel in the left image, try several possible matches in the right
-image. Give each match a cost, then keep the disparity with the lowest cost.
-That is “winner-take-all”: each pixel independently chooses its best candidate.
-There is no extra rule forcing neighboring pixels to choose similar disparities.
+**Tool:** Winner-take-all stereo using census descriptors and Hamming distance.
+Each pixel tries several horizontal shifts and keeps the one with the lowest cost.
 
-The census transform supplies the matching cost. It describes the pattern around
-a pixel using bits instead of comparing raw brightness values directly.
+### A1. Build the census descriptor
 
-**A3. The math, step by step**
+**Plain English:** Turn the light-and-dark pattern around a pixel into bits.
 
-1. **Build a census descriptor.** For pixel $p=(x,y)$ and each neighbor offset
-   $q$ in a census window $N_c$, record whether the neighbor is darker than the
-   center. Leave out the center itself:
+$$C_I(p)=\mathrm{concat}_{q\in N_c\setminus\{0\}}\mathbf{1}[I(p+q)<I(p)]$$
 
-   **Plain English:** Turn the light-and-dark pattern around a pixel into a string of 0s and 1s.
-
-   $$C_I(p)=\mathrm{concat}_{q\in N_c\setminus\{0\}}\mathbf{1}[I(p+q)<I(p)]$$
-
-   Here $\mathrm{concat}$ joins the bits into one descriptor. The indicator
-   $\mathbf{1}[\cdot]$ is 1 if the comparison is true and 0 otherwise. A 3 × 3
-   window gives 8 bits; a 7 × 7 window gives 48.
-
-2. **Score each possible disparity.** For candidate disparity $d$, compare the
-   left descriptor at $(x,y)$ with the right descriptor at $(x-d,y)$:
-
-   **Plain English:** Try a match and count how many bits disagree.
-
-   $$H(p,d)=\mathrm{popcount}\!\left(C_L(x,y)\;\mathrm{XOR}\;C_R(x-d,y)\right)$$
-
-   XOR marks differing bits; popcount counts them. This is the **Hamming distance**.
-   Fewer differing bits means a lower cost, although it does not guarantee the match is right.
-
-3. **Add support from nearby pixels.** Sum those costs over an aggregation
-   window $N_A$ centered at the left pixel:
-
-   **Plain English:** Ask nearby pixels to help score the match.
-
-   $$S(p,d)=\sum_{u\in N_A}H(p+u,d)$$
-
-   The census window builds each descriptor; the aggregation window combines
-   matching evidence. They are separate window sizes.
-
-4. **Let the lowest cost win.** Search the allowed disparity set $D$:
-
-   **Plain English:** Keep the shift with the fewest disagreements.
-
-   $$\hat d(p)=\underset{d\in D}{\arg\min}\;S(p,d)$$
-
-   For Teddy, $D=\{0,1,\ldots,63\}$. The implementation chooses the smaller
-   disparity on a tie and skips candidates whose required windows cross an image boundary.
-
-**A4. What is a disparity map?**
-A disparity map stores the estimated horizontal shift $\hat d(x,y)$ at each
-left-image pixel. If a point appears at column 100 on the left and column 80 on
-the right, its disparity is $100-80=20$ pixels. It stores a shift, not depth directly.
-For this rectified camera setup:
-
-**Plain English:** Measure how far the point moved sideways; a bigger shift means it is closer.
-
-$$d=x_L-x_R,\qquad Z=\frac{f_x B}{d}$$
-
-Here $f_x$ is horizontal focal length in pixels, $B$ is camera separation, and
-$Z$ is depth. Larger disparity means a closer point when $f_x$ and $B$ are fixed.
-The displayed maps make larger disparities brighter. Black may also mark invalid
-pixels, so it does not always mean a distant surface.
-
-**Problem 1 starts with two supplied photographs.** Here I built the census
-matcher, compared window sizes, measured error against the supplied ground truth,
-and tried three improvements. Everything in sections 1–4 uses the Teddy pair.
-
-### 1. How the census transform works
-
-#### 1a. Building the descriptor
-
-The census transform compares each pixel with the pixels around it. If a neighbor
-is darker than the center, it records a 1; otherwise, a 0. A 3 × 3 window gives
-eight bits, and a 7 × 7 window gives 48. Hamming distance just counts how many
-bits are different between two descriptors.
-
-What I took from this is that the actual brightness doesn't have to match exactly.
-The ordering of darker and lighter pixels matters. That helps with brightness
-changes that preserve the ordering, although noise and clipping can still cause problems.
-
-#### 1b. Seeing what it records
+A darker neighbor gives a 1; otherwise, a 0. The center is left out. A 3 × 3
+window gives 8 bits; a 7 × 7 window gives 48. The pattern depends on relative
+brightness, though noise and clipping can still change it.
 
 | 3 × 3 census | 7 × 7 census |
 | --- | --- |
-| ![Teddy left image represented by an eight-bit census descriptor's set-bit count](docs/images/teddy_census_3.png) | ![Teddy left image represented by a 48-bit census descriptor's set-bit count](docs/images/teddy_census_7.png) |
+| ![Small census window](results/teddy_census_left_wc3.png) | ![Large census window](results/teddy_census_left_wc7.png) |
 
-To display the descriptors, I counted the 1 bits and scaled the possible range
-to 0–255. Both images pick up similar edges, but the larger window picks up more
-of the surrounding structure. The matching code still uses all the bits. Just
-counting the 1s would lose their positions and could make different patterns look the same.
+For these pictures, I counted the 1 bits and scaled the possible range to 0–255.
+Matching uses the complete bit pattern, since equal counts can hide different patterns.
 
-### 2. What happened when I changed the window sizes
+### A2. Compare possible matches
 
-#### 2a. Finding a match
+**Plain English:** Try a match and count how many bits disagree.
 
-For every pixel in the left image, I searched for a match in the right image
-using `x_right = x_left - d`, with disparities from 0 to 63. I added up the
-Hamming distances over a window and picked the disparity with the lowest cost.
-That's the winner-take-all part. If costs tie, the smaller disparity wins.
-I used integral images to calculate the window sums faster.
+$$H(p,d)=\mathrm{popcount}\left(C_L(x,y)\;\mathrm{XOR}\;C_R(x-d,y)\right)$$
 
-#### 2b. Comparing small and large windows
+XOR marks differing bits, and popcount counts them. That is Hamming distance.
+For Teddy, I searched disparities from 0 through 63.
 
-| Census 3 × 3, aggregation 5 × 5 | Census 7 × 7, aggregation 9 × 9 |
+### A3. Add nearby evidence
+
+**Plain English:** Ask nearby pixels to help score the match.
+
+$$S(p,d)=\sum_{u\in N_A}H(p+u,d)$$
+
+The census window builds the descriptor. The aggregation window adds matching
+costs. These are separate window sizes; I tried aggregation sizes 5 × 5 and 9 × 9.
+
+### A4. Pick the winner
+
+**Plain English:** Keep the shift with the fewest disagreements.
+
+$$\hat d(p)=\underset{d\in D}{\arg\min}\;S(p,d)$$
+
+Each pixel chooses independently. Ties use the smaller disparity. Candidates need
+complete census and aggregation windows in both views; invalid borders are black.
+
+A **disparity map** stores these horizontal shifts. A point at column 100 on the
+left and column 80 on the right has disparity 20 pixels.
+
+| Small windows: census 3, aggregation 5 | Large windows: census 7, aggregation 9 |
 | --- | --- |
-| ![Small-window disparity map with noticeable speckle](docs/images/teddy_disparity_3_5.png) | ![Larger-window disparity map with reduced speckle and smoother boundaries](docs/images/teddy_disparity_7_9.png) |
+| ![Small-window Teddy disparity](results/teddy_disparity_view_wc3_wa5.png) | ![Large-window Teddy disparity](results/teddy_disparity_view_wc7_wa9.png) |
 
-Brighter pixels indicate larger disparity and therefore closer surfaces. Display
-values map disparities 0–63 to 0–255. Black can mean either zero disparity or an
-invalid pixel; the separate validity masks distinguish them.
+Larger windows reduced speckle but mixed depths near boundaries. Brighter means
+larger disparity. Black can also mean invalid, rather than a distant surface.
 
-The larger windows made the result less noisy. They didn't fix everything,
-though. Around an object's edge, one window can contain both the object and the
-background, so it mixes information from different depths. Thin objects are
-also harder to keep. I only allowed matches where both windows fit in both images.
+### A5. Measure the error and try improvements
 
-### 3. A lower error number needs some context
+I divided the stored ground truth by four and rounded with `floor(value/4 + 0.5)`.
+A pixel is bad when its disparity error is **greater than one**.
 
-#### 3a. Calculating the error
-
-Ground truth is divided by four and rounded with `floor(value / 4 + 0.5)`.
-A pixel is bad when its disparity differs by **more than one** from that result.
-An error of exactly one is acceptable.
-
-| Census size | Aggregation size | Whole-image error | Shared-interior error |
+| Census | Aggregation | Whole-image error | Shared-interior error |
 | --- | --- | ---: | ---: |
 | 3 | 5 | 27.9911% | 18.8012% |
 | 3 | 9 | 24.4480% | 13.1459% |
 | 7 | 5 | **24.1807%** | 12.8687% |
 | 7 | 9 | 24.5031% | **11.6175%** |
 
-#### 3b. Checking which pixels count
+Whole-image error counts all 168,750 pixels, including borders and ground-truth
+zeros. Shared-interior error uses the same 131,311 pixels for all settings:
+rows `[7,368)`, columns `[70,443)`, stored ground truth >0. The handout doesn't
+fully specify this convention, so I kept both scores. They give different winners.
 
-The whole-image metric counts all **168,750 pixels**, including black output
-borders and ground-truth zeros. The shared-interior metric uses the same
-**131,311 pixels** for every configuration: rows `[7,368)`, columns `[70,443)`,
-and stored ground truth greater than zero. These pixels support every searched
-disparity under all four window settings.
-
-This was something I had to be careful about: 11.62% looks much better than
-24.50%, but they count different pixels. Larger windows also leave bigger invalid
-borders, which affects the whole-image score. Even the best window setting changes
-depending on which score I use.
-
-So I kept both results and made the pixel counts clear. I still need to confirm
-how the course wants borders and ground-truth zeros handled. Excluding those zeros
-is an assumption in the masked score.
-[Detailed results and all three metric variants](results/teddy.md).
-
-### 4. I tried three things to make it better
-
-#### 4a. Comparing the three attempts
-
-Starting with the 7 × 7 census and 9 × 9 aggregation result, I tried a median
-filter, a left/right check, and a uniqueness check. Each was tested separately
-against the same baseline.
+I also tried three changes to the (7,9) baseline:
 
 | Method | Shared-interior error | Whole-image error |
 | --- | ---: | ---: |
-| Baseline | 11.6175% | 24.5031% |
 | Median filter | 11.4453% | 24.3674% |
 | Left/right check + filling | **8.6756%** | **20.5055%** |
 | Uniqueness check + filling | 10.1568% | 23.3920% |
 
-#### 4b. Keeping the best result
+![Best Teddy refinement](results/teddy_refined.png)
 
-| Baseline | Left/right check + filling |
-| --- | --- |
-| ![Unfiltered Teddy disparity map](docs/images/teddy_disparity_7_9.png) | ![Refined Teddy disparity map with reduced speckle and some horizontal filling streaks](docs/images/teddy_refined.png) |
-
-The left/right check worked best. Basically, if a pixel matches somewhere in the
-right image, matching back should bring it to roughly the same place. I allowed
-a difference of one disparity. For rejected matches, I filled from the nearest
-trusted pixels in the same row, choosing the smaller disparity.
-
-The filled pixels still count in the error rate. I didn't get a better score by
-leaving the difficult pixels out. This gave about 25.3% fewer bad interior pixels.
-
-#### 4c. What still goes wrong
-
-You can see the improvement, but also some horizontal streaks from filling.
-It can lose thin foreground details too. The median filter barely helped compared
-with the left/right check. I learned that a cleaner image and a lower error rate
-are both useful to check. These results are just for Teddy; I haven't tested the
-improvements on another scene.
-
-Only the best refinement runs in the experimental script. The other attempts remain
-as commented code. The required unfiltered results are preserved separately.
-[Experiment details](results/teddy_improvements.md).
+Checking a match in both directions worked best. I allowed a difference of one
+disparity, then filled rejected pixels from trusted neighbors in the same row,
+choosing the smaller disparity. Filled pixels still count in the error rate.
+It reduced interior bad pixels by about 25.3%, but introduced horizontal streaks.
+The other attempts remain commented in `improve_teddy.py`.
 
 ## B. Fish stereo
 
-**B1. Central question:** Can I choose two camera views of a known 3D scene so
-that the images are easy to match, and can I explain the disparities from the geometry?
+**Question:** Can I set up cameras that produce a matchable stereo pair and explain
+the disparities from the scene geometry?
 
-**B2. Tools being tested:** The pinhole camera model and rectified stereo geometry.
-The camera model projects 3D points into image pixels. Parallel cameras with the
-same calibration and a horizontal baseline put corresponding points on the same
-row. The relationship `d = fx × baseline / Z` tells me what disparities to expect.
-I then reuse the census/Hamming matcher from Teddy on the rendered pair.
+**Tools:** Pinhole projection, rectified cameras, and the same census matcher.
 
-**B3. What are rectified images?**
-A stereo pair is rectified when corresponding scene points lie on the **same
-image row**. Then matching only has to search horizontally:
+### B1. Rectified images and camera positions
+
+**Rectified images** put corresponding scene points on the same row.
 
 **Plain English:** Look along the same row in the other picture.
 
 $$y_L=y_R,\qquad x_R=x_L-d$$
 
-For a point at left pixel $(100,50)$, search candidate right pixels along row 50,
-rather than searching the whole right image. A point must be visible in both
-views for a real correspondence to exist; rectification does not remove occlusions.
-
-Real camera images can be rectified by warping them using their calibration.
-For the fish scene, I generate rectified views directly: both cameras have the
-same orientation and intrinsics, and their centers differ only horizontally.
-They show different viewpoints; rectified does not mean identical.
-
-**Problem 2 starts with the 3D point cloud from HW1.** Here I had to create the
-left and right images first, which meant choosing the camera positions,
-calibration, resolution, and disparity range. Then I reused the Teddy matcher.
-Sections 5–6 cover that setup and the fish results.
-
-### 5. Making a stereo pair from the fish scene
-
-#### 5a. Setting up the cameras
-
-For the fish scene, I used parallel cameras with the same calibration and a
-horizontal separation of **0.12 scene units**. The left camera center is at the
-origin; the right center is `(0.12, 0, 0)`.
+This makes matching a horizontal search. Rectification doesn't remove occlusions.
+I rendered rectified views directly using parallel cameras with the same intrinsics
+and a horizontal baseline of 0.12 scene units.
 
 | Left view | Right view |
 | --- | --- |
-| ![Left rendered fish-fountain image](docs/images/fish_left.png) | ![Right rendered fish-fountain image showing newly exposed holes near depth edges](docs/images/fish_right.png) |
+| ![Left fish image](results/fish_left_rgb.png) | ![Right fish image with newly exposed holes](results/fish_right_rgb.png) |
 
-One detail I checked was the camera translation sign. The camera position and
-the translation in the matrix aren't the same thing. With
-`X_camera = R @ X_world + t`, the translation is `t = -R @ C`.
-So putting the right camera at positive X means using a negative X translation.
-Both cameras keep the same orientation, and matching points project to the same row.
+The camera centers are `(0,0,0)` and `(0.12,0,0)`. With
+`X_camera = R @ X_world + t`, translation is `t = -R @ C`, so the right camera
+uses translation `(-0.12,0,0)`.
 
-#### 5b. Choosing the disparity range
+### B2. Depth, disparity, and resizing
 
-The depth–disparity relationship is:
+**Plain English:** A bigger sideways shift means the point is closer.
 
-```text
-d = fx × baseline / Z
-```
+$$d=\frac{f_x B}{Z},\qquad Z=\frac{f_x B}{d}$$
 
-At the chosen resolution, `fx = 1379.75` pixels. Scene depths of approximately
-3.8663–9.6567 predict disparities of 17.1456–42.8241 pixels. I therefore searched
-**0–44**, allowing a small rounding margin. Disparity 44 corresponds to depth
-3.7630 scene units; disparity zero is the infinite-depth limit. Baseline and
-scene depth must use the same units, but a physical metre scale is not required.
+At `fx=1379.75` pixels, depths 3.8663–9.6567 predict disparities 17.1456–42.8241.
+I searched 0–44. Disparity 44 corresponds to depth 3.7630 scene units; zero is the
+infinite-depth limit. Physical units are unconfirmed, so lengths use scene units.
 
-#### 5c. Checking the result
+I interpreted quarter resolution as quarter total pixels: 3072 × 2048 becomes
+1536 × 1024. Scaling the first two rows of K by 0.5 preserves the field of view.
+The course still needs to confirm that wording; `fish.py --scale 0.25` supports
+the quarter-width/height interpretation instead.
 
-![Fish disparity map: the nearby fish is bright, while the distant wall is darker](docs/images/fish_disparity.png)
+![Fish disparity, census 3 and aggregation 9](results/fish_disparity_view_wc3_wa9.png)
 
-This is the result with a 3 × 3 census window and 9 × 9 aggregation window,
-displayed over disparities 0–44. The fish is brighter because it's closer.
-The wall is farther away, so its disparity is smaller.
+The fish is closer, so it has higher disparity than the wall. I used the required
+grayscale weights, `round(0.30R + 0.59G + 0.11B)`, and no maximum filtering or hole filling.
 
-All four window settings were run. Against a depth-derived reference, their
-masked diagnostic errors were 0.7700%, 0.2253%, 0.3017%, and 0.2886% for
-`(3,5)`, `(3,9)`, `(7,5)`, and `(7,9)`. These are **synthetic consistency checks**,
-not independent ground-truth scores: the reference comes from the rendering depth,
-and the mask excludes holes and many occlusions. They are not comparable to
-Teddy's whole-image errors. [Fish geometry and results](results/fish.md).
+The CPU renderer keeps the nearest positive-depth point per pixel. I used it
+because Open3D 0.19.0 headless rendering failed on this Mac. The right-view holes
+show surfaces missing from the original single-view cloud.
 
-### 6. What I had to sort out with rendering
+All four settings ran. Depth-derived diagnostic errors were 0.7700%, 0.2253%,
+0.3017%, and 0.2886% for (3,5), (3,9), (7,5), and (7,9). These use 1,379,716
+visible interior pixels and a reference from the rendering depth. They aren't
+independent ground-truth scores or comparable to Teddy's whole-image errors.
 
-#### 6a. Resizing without changing the view
+## C. Bonus: RANSAC and homography
 
-I interpreted “quarter resolution” as one quarter of the total pixel count:
-3072 × 2048 becomes **1536 × 1024**. Scaling the first two rows of the intrinsic
-matrix by 0.5 scales focal lengths and principal point with the image dimensions,
-preserving horizontal and vertical field of view. The alternate interpretation,
-quarter width and height, is available through `--scale 0.25`; course confirmation
-of the wording is still pending.
+**Question:** Can I find the ground, then use that plane to change the viewpoint?
+What happens to objects above it?
 
-#### 6b. Getting the renderer working on my Mac
+**Tools:** RANSAC (Random Sample Consensus) finds a plane among outliers. A
+plane-induced homography maps that plane between camera views.
 
-Open3D 0.19.0 offscreen rendering failed on this Intel Mac with
-`EGL Headless is not supported on this platform`, even outside the sandbox.
-I adapted HW1's NumPy projection approach instead. The CPU renderer keeps the
-nearest positive-depth point at each rounded pixel using a depth buffer. It uses
-zero-based pixels and does not apply maximum filtering, interpolation, or hole filling.
+### C1. Find and remove planes
 
-#### 6c. Understanding the missing parts
-
-The holes beside the fish in the right image aren't just noise. Moving the camera
-reveals areas the original point cloud doesn't contain. Projecting the points
-again can't create those missing surfaces, so I left the holes black.
-For grayscale, I used the assignment's weights:
-`round(0.30 R + 0.59 G + 0.11 B)`.
-
-## C. Bonus: planes and homography
-
-**C1. Central question:** Can I find the ground in the point cloud, then use it
-to turn one image into a view from above? What happens to objects above the ground?
-
-**C2. Tools being tested:** RANSAC finds a plane despite points that don't belong
-to it. A plane-induced homography changes the image viewpoint correctly for
-points on that plane. They solve different parts of the bonus.
-
-### C3. Finding planes with RANSAC
-
-**Plain English:** Pick three points, guess a flat surface, and count how many
-other points sit close to it. Repeat and keep the surface with the most support.
+**Plain English:** Pick three points, guess a flat surface, and count nearby points.
+Repeat and keep the guess with the most support.
 
 $$n^T X+d=0,\qquad \lVert n\rVert=1,\qquad |n^T X+d|<\tau$$
 
-The first equation describes the plane. The inequality is the inlier rule, with
-threshold $\tau=0.025$ scene units. I used three-point SVD fits, seed 532, and
-30,000 sampled points to score each guess. The trial budget adapts toward 0.999
-sampling confidence, capped at 2,000. I then refined the fit and checked all the
-remaining points, removing each plane's inliers before finding the next one.
+I used three-point SVD fits, threshold `0.025` scene units, seed 532, and 30,000
+sampled points for scoring. The trial budget targets 0.999 sampling confidence,
+capped at 2,000. I refined the best plane, checked the full remaining cloud,
+removed its inliers, and repeated.
 
-| Plane | Inliers | What it picked up |
+| Plane | Inliers | What it found |
 | --- | ---: | --- |
 | 1 | 2,356,913 | Background wall |
 | 2 | 854,217 | Ground |
 | 3 | 407,538 | Parts of the fountain facade |
 
-![Ground-plane inliers in green, after removing the first wall plane](docs/images/bonus_ground.png)
+![Ground inliers in green after removing the wall](results/bonus_plane_2_inliers.png)
 
 The second plane covers the floor. Its unit normal is approximately
-`(0.004634, -0.998713, 0.050514)`, with `d = 1.583236`, in the original camera
-frame. The green result matters here: a normal that points roughly upward is a
-useful clue, but I still checked that the detected points actually cover the ground.
+`(0.004634, -0.998713, 0.050514)`, with `d=1.583236` in the original camera frame.
+I used its orientation and position to identify it, then checked the green render.
+The trial confidence is a sampling heuristic, not proof of correct detection.
 
-### C4. Rendering from above and warping the original
+### C2. Compare the bird's-eye render and warp
 
-I placed the second camera 8.9328 scene units above a target on the ground plane,
-with its optical axis pointing along the negative plane normal. The first image
-uses the original camera pose. Both images are 768 × 512.
+I put the overhead camera 8.9328 scene units above a ground target and pointed
+its optical axis along the negative plane normal. Both bonus views are 768 × 512.
 
-**Plain English:** Use the ground as a flat sheet and work out where its pixels
-would land in the overhead camera.
+**Plain English:** Treat the ground as a flat sheet and move its pixels to the new view.
 
 $$H=K_B\left(R_B-\frac{t_B n^T}{d}\right)K_A^{-1}$$
 
-This form assumes the first camera is the world frame, as it is here. I used
-inverse mapping and wrote the bilinear interpolation directly: each output pixel
-gets a weighted blend of its four source neighbors.
+Here the original camera is the world frame. I inverse-mapped pixels with H and
+implemented bilinear interpolation from the four source neighbors directly.
 
-| Direct 3D render from above | Original image warped using the ground plane |
+| Direct render from above | Ground-plane warp |
 | --- | --- |
-| ![Bird's-eye point-cloud render with sparse surfaces and missing geometry](docs/images/bonus_birdseye.png) | ![Ground-plane image warp that stretches the raised fountain](docs/images/bonus_warp.png) |
+| ![Overhead 3D render](results/bonus_birdseye_b.png) | ![Image warped using the ground plane](results/bonus_warped_a.png) |
 
-The ground features line up geometrically, but the fountain doesn't. The warp
-acts as if the fountain is painted onto the floor. The 3D renderer keeps its
-height, but also shows the holes in the original point cloud. A denser-looking
-warp isn't necessarily a more correct view.
+The ground follows the mapping, but the raised fountain gets stretched onto the
+floor. One homography can't reproduce off-plane parallax. The 3D render keeps
+height but exposes missing geometry. Exact plane points agreed under the two
+projection calculations within `3.84e-13` pixels; that isn't a whole-image score.
 
-The plane-projection check agreed within about `3.84e-13` pixels. That's a check
-of the geometry for points exactly on the plane, not a full-image accuracy score.
-[Parameters, comparison, and checks](results/bonus.md).
+## D. Running it
 
-```sh
-.venv/bin/python scripts/check_bonus.py
-.venv/bin/python scripts/run_bonus.py
-.venv/bin/python scripts/build_bonus_report.py
-```
+### D1. Files
 
-The bonus has its own report at `output/pdf/homework2_bonus.pdf`. It is separate
-from the required report so the original one-page explanation remains unchanged.
+There are two folders: `data/` for inputs and `results/` for images, metrics, and PDFs.
+Python files are at the root:
 
-## D. Checks, setup, and reflection
+| File | Purpose |
+| --- | --- |
+| `stereo.py` | Census, Hamming distance, aggregation, and winner-take-all |
+| `renderer.py` | Point projection, depth buffer, and calibration scaling |
+| `planes.py` | Plane fitting, RANSAC, homography, and bilinear warping |
+| `teddy.py`, `fish.py`, `bonus.py` | Run each part |
+| `improve_teddy.py` | Best refinement, with other attempts commented |
+| `check.py` | Small correctness checks |
+| `report.py`, `bonus_report.py` | Build the reports |
+| `run.py` | Run everything in order |
 
-**D1. Central question:** How do I know the result is right, rather than just
-something that looks convincing or gets a lower score under a different set of rules?
+Inputs are `data/teddyL.pgm`, `data/teddyR.pgm`, `data/disp2.pgm`, and the trusted
+HW1 pickle `data/data.obj`. The scene is about 267 MiB and isn't tracked in Git.
+Only load the trusted course pickle.
 
-**D2. Tools used to check it:** Small examples with known answers, an independent
-brute-force matching calculation, projection checks, and bad-pixel error rates.
-The small examples check individual steps; the error rates compare final results
-on stated sets of pixels. Saving the inputs, settings, and commands makes those
-checks repeatable. This part checks the experiments rather than testing another stereo method.
+### D2. Commands
 
-The rest covers checks for the required work and bonus, how to run the code, what is left,
-and what I learned from the assignment.
-
-### 7. How I checked it
-
-I checked small examples before relying on the full images:
-
-- **7a.** A hand-computed census descriptor and Hamming counts spanning all 48 bits.
-- **7b.** Integral window sums compared with direct neighborhood sums.
-- **7c.** Identical inputs giving zero disparity and controlled shifts recovering the known shift.
-- **7d.** Winner-take-all results compared with an independent nested-loop reference.
-- **7e.** Border masks, tie behavior, and the bad-pixel threshold.
-- **7f.** Camera projection, rectification, calibration scaling, grayscale weights, and RGB file readback.
-- **7g.** Refinement filling rules and reverse matching on a known shifted image.
-
-These checks passed. I also checked the rendered report pages and 36 output
-images for things like dimensions, mask values, and disparity ranges. The
-remaining questions are about the assignment's conventions, especially the
-resolution wording and which pixels to count in the Teddy error rate.
-
-
-### 8. Running it
-
-#### 8a. Environment
-
-The tested setup is **Python 3.12 on Intel macOS**. From the repository root:
+Tested with Python 3.12 on Intel macOS. Run from the repository root:
 
 ```sh
 python3.12 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python -m pip check
+.venv/bin/python -B run.py
 ```
 
-#### 8b. Inputs
+Individual parts can be run with `teddy.py`, `improve_teddy.py`, `fish.py`, and
+`bonus.py`. Results are overwritten when rerun. The reports are
+[report.pdf](results/report.pdf) and [bonus.pdf](results/bonus.pdf).
+Raw disparity PNGs store pixel shifts; `disparity_view` PNGs are scaled for display.
 
-The dependency file records the installed versions; other platforms may require
-compatible package adjustments. Restore these inputs before running:
+The checks cover hand-computed descriptors, Hamming counts, direct window sums,
+known shifts, brute-force matching, camera geometry, plane fitting, and interpolation.
+TODO and JOURNAL track the remaining work and previous sessions. Older journal
+paths refer to the layout before cleanup.
 
-| Input | Purpose |
-| --- | --- |
-| `teddy/teddyL.pgm`, `teddy/teddyR.pgm` | 450 × 375 grayscale stereo pair; also supplied in `teddy 2.zip` |
-| `teddy/disp2.pgm` | Stored ground-truth disparity |
-| `data/data.obj` | Trusted HW1 pickle: image dimensions, window settings, K, foreground and background XYZ/RGB arrays |
+### D3. Before submitting
 
-The fish data is approximately 267 MiB and is excluded from Git. Obtain it from
-the HW1 course materials and place it at `data/data.obj`. Load only the trusted
-course pickle. Physical units are unconfirmed; all camera translations and depths
-use the cloud's scene units.
+Confirm the Teddy evaluation convention and quarter-resolution wording. Add student
+identification if required, check Canvas requirements, and upload the files.
+The required experiments and bonus are implemented; nothing has been submitted.
 
-#### 8c. Commands
+## E. What I learned & most interesting questions
 
-```sh
-# Validate inputs and the CPU renderer.
-.venv/bin/python scripts/check_inputs.py
-.venv/bin/python scripts/check_renderer.py
+### E1. What I learned
 
-# Check and run the required Teddy method.
-.venv/bin/python scripts/check_stereo.py
-.venv/bin/python scripts/run_teddy.py
+A low matching cost doesn't guarantee a correct match. Checking both directions
+helped more than just smoothing. Bigger windows reduced noise but lost detail,
+and changing which pixels I counted changed which setting looked best.
 
-# Run the selected optional Teddy refinement.
-.venv/bin/python scripts/try_teddy_improvements.py
+The camera setup mattered just as much as matching. Baseline, focal length, and
+depth gave me a reason for the search range. The bonus also made the limits clear:
+a ground-plane warp can't correctly move a raised object, and neither rendering
+nor interpolation can recover geometry that was never captured.
 
-# Check and run the rendered fish stereo experiment.
-.venv/bin/python scripts/check_fish_geometry.py
-.venv/bin/python scripts/run_fish.py
+### E2. Questions I'd try next
 
-# Build the five-page report from the saved results.
-.venv/bin/python scripts/build_report.py
-```
-
-#### 8d. Where the files go
-
-| Location | Contents |
-| --- | --- |
-| [src/stereo.py](src/stereo.py) | Census descriptors, Hamming costs, aggregation, and matching |
-| [src/pointcloud_renderer.py](src/pointcloud_renderer.py) | CPU projection, visibility, and intrinsic scaling |
-| `output/teddy/` | Required census images, disparity maps, masks, and measurements |
-| `output/teddy_improvements/` | Refinement images, original comparison, and `best_metrics.json` |
-| `output/fish/scale_0.5_baseline_0.12/` | Fish views, disparities, depths, masks, and geometry measurements |
-| `output/pdf/homework2_report.pdf` | One explanatory page followed by four figure pages |
-| `output/bonus/` | Plane inlier renders, bird's-eye comparison, and exact parameters |
-| `output/pdf/homework2_bonus.pdf` | Separate bonus explanation and figures |
-| [docs/images/](docs/images/) | Selected output snapshots embedded in this README |
-
-`output/` is generated locally and ignored by Git. The embedded snapshots are
-stored separately so the README remains readable in a fresh checkout. Rerunning
-the experiments does not automatically refresh these snapshots.
-
-The original `dolly_zoom_fast-1.py` and Open3D diagnostic remain for reference;
-they are not required by the working CPU pipeline. The original dolly-zoom
-sequence has not been validated.
-
-### 9. What is left
-
-#### 9a. Before submitting
-
-The main experiments and report have been checked, and the complete workflow
-passed both in the repository and in an extracted copy of the submission ZIP.
-The numerical results reproduced exactly, apart from runtimes. The extended
-eleven-stage run including bonus checks, rendering, and report generation also
-passed. Use `scripts/verify_workflow.py --bonus` to repeat that extended run.
-
-The required-only package is `output/submission/homework2_submission.zip`.
-The version including the bonus is `output/submission/homework2_submission_with_bonus.zip`.
-It includes source, course inputs, separate output folders, the report, run
-instructions, and a checksum manifest. Archive checks, file hashes, and image
-decoding passed. To repeat the workflow locally:
-
-```sh
-.venv/bin/python scripts/verify_workflow.py
-```
-
-I still need to confirm the Teddy evaluation rules, the meaning of “quarter
-resolution,” and Canvas upload requirements, then add my details if required and
-submit. Nothing has been uploaded to Canvas. The optional plane estimation and
-homography bonus is now implemented and documented separately.
-
-
-#### 9b. Notes and assignment files
-
-See [TODO.md](TODO.md) for the checklist, [JOURNAL.md](JOURNAL.md) for session-by-session
-attempts and outcomes, and the supplied `cs532f27_hw2 (1).pdf` and
-`HW2Bonus-1 (1).pdf` for the assignment requirements.
-
-### 10. What I learned & most interesting questions
-
-#### 10a. Teddy: what actually makes a match useful?
-
-The biggest thing I learned is that finding a low matching cost doesn't mean the
-match is right. Repeated textures can give a convincing match in the wrong place.
-The left/right check helped because it asked whether the match made sense from
-both directions. That worked better here than just smoothing the result.
-
-#### 10b. Teddy: a better-looking image isn't the whole answer
-
-The larger windows and filling made things look cleaner, but they also lost some
-detail. I need to look at the image and the numbers together. Even then, I have
-to check what those numbers count. The 11.62% and 24.50% scores came from the
-same prediction with different evaluation masks.
-
-#### 10c. Fish: the camera setup is part of the algorithm
-
-I learned how the baseline, focal length, and depth fit together. Once those are
-set, the disparity range has a reason behind it. I also had to keep track of the
-camera position versus its matrix translation, and scale the intrinsics along
-with the image. Those details decide whether the later matching even makes sense.
-
-#### 10d. Fish: some missing pixels are actually missing information
-
-The holes in the fish scene made this clearer for me. Moving the camera can show
-an area that wasn't in the original point cloud. Filling that hole might make
-the image look complete, but it doesn't mean I recovered the actual surface.
-
-#### 10e. Could the window size change depending on the pixel?
-
-The bigger windows helped broad regions but caused trouble at edges. Could I use
-a bigger window where the surface is fairly consistent and a smaller one near
-boundaries? I'd want to test whether that keeps the lower noise without losing
-as much detail.
-
-#### 10f. When should I fill a rejected match, and when should I leave it unknown?
-
-Filling improved the score, but the horizontal streaks show where the assumption
-can go wrong. I'd like to compare the current row-based filling with a method
-that uses image edges, and also show which values were measured and which were filled.
-
-#### 10g. How far apart should the cameras be?
-
-A larger baseline gives a larger disparity, but it also changes how much of the
-scene both cameras can see. Where does that stop helping? I'd try several
-baselines on the same scene and compare errors, visible coverage, and holes.
-
-#### 10h. Would the best method still win on another pair?
-
-The left/right check worked best on Teddy, while the rendered fish pair was much
-easier to match on its visible surfaces. I'd want to try another real stereo pair
-before assuming the same settings are generally better. The next comparison
-should keep the evaluation rules fixed from the start.
-
-#### 10i. Bonus: when does a flat-image warp stop working?
-
-The bird's-eye comparison made this clear. The ground can follow one homography,
-but the raised fountain can't. I'd like to see whether separate planes would
-improve the result, and where missing geometry would still make a full 3D model necessary.
+- **E2a.** Could the window size change near edges instead of staying fixed everywhere?
+- **E2b.** When should a rejected match stay unknown rather than be filled?
+- **E2c.** How much can I increase the baseline before occlusions outweigh the benefit?
+- **E2d.** Would the best Teddy refinement still win on another real image pair?
+- **E2e.** Would several plane homographies help the fountain, or would I need fuller 3D data?

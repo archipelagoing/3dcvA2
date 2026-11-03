@@ -399,3 +399,93 @@ TODO items covered: 6a–6k; extended verification and refreshed bonus-inclusive
   the chosen threshold; it is not proof that a visually meaningful plane was found.
 - No new runtime/test failures occurred. Course conventions and Canvas submission
   remain with the student; no external checking or upload was performed.
+
+## 14 — Preparing one compact hand-in folder
+Date: 2026-11-03
+TODO items covered: submission organization and verification (5e–5h); README bonus explanation checked.
+
+### What was tried
+- Confirmed README explains RANSAC, its plane equation, threshold, sampling/trial
+  choices, sequential removal, detected planes, and homography comparison.
+- Curated `submission/` with three reusable source modules, selected run/check/report
+  scripts, key census/stereo/plane figures, metrics, course inputs, and both reports.
+- Compressed the exact original fish input with gzip and added `run.py` to unpack
+  it and reproduce all included experiments. Added concise READ_ME_FIRST.txt instructions.
+- Verified checksums, image readability, compressed-input recovery, ZIP CRC, and
+  a complete run from a disposable extracted copy using the existing environment.
+
+### What worked
+- The folder has 58 files and is 136.0 MiB. Its uploadable ZIP is 132.9 MiB at
+  `output/submission/compact_submission.zip`.
+- Exact fish-input recovery passed SHA-256 comparison. Extracted `run.py` passed
+  the included checks, experiments, and both report builds; numerical results
+  matched the repository results, excluding runtimes.
+- Removed development logs, cache folders, large depth/reference arrays, duplicate
+  comparison panels, and unused renderer diagnostics from this curated hand-in.
+- Kept key raw/display disparity results, plane figures, and final reports. The
+  compressed scene preserves the handout's requirement to include points used.
+- Recorded verification in `output/verification/compact_submission.json`. The
+  compact folder is ignored by Git to avoid accidentally committing the large input.
+
+### What did not work
+- The course point cloud still dominates the size: its gzip stream is about
+  112 MiB. Omitting it would make the hand-in much smaller but would omit a required input.
+- The clean-install dependency step on another machine was not tested; reproduction
+  used the existing Python environment. The run instructions state that limitation.
+- Course conventions, student identification if required, and Canvas upload remain
+  the student's responsibility. No external checks or uploads were performed.
+
+## 15 — Simplifying the repository layout
+Date: 2026-11-03
+TODO items covered: layout cleanup and repeatability; no new algorithm work.
+
+### What was tried
+- Moved the Python implementation and runners to the root, combined the small
+  checks into check.py, and made run.py execute the complete assignment.
+- Consolidated inputs into data/ and selected figures, metrics, and reports into
+  results/. Updated imports, output paths, README, and TODO.
+- Removed duplicate submissions, extracted checkouts, temporary images, old
+  diagnostics, packaging helpers, and redundant image copies.
+- Reduced requirements to four direct packages and removed 55 unused packages
+  from the local environment.
+
+### What worked
+- The simplified full run passed, including both report builds. Numerical metrics
+  and selected image bytes matched the previous results before deletion.
+- The small checks passed again after trimming the environment; pip check passed.
+- There are two visible project folders: data/ and results/. The hidden runtime
+  environment remains. README preserves the math, images, and learned lessons.
+
+### What did not work
+- The cleanup's final PDF-render comparison did not complete before the session
+  ended. A later status check found the temporary backup/render directory missing,
+  so its old ZIP and images must not be presented as currently available.
+- Current reports were rebuilt successfully, but their updated first-page file
+  references still need a fresh visual review. Earlier report content was reviewed.
+- Old in-repository ZIPs were removed. A fresh submission ZIP needs to be made
+  from the current simplified layout before uploading.
+- Course conventions, identification if required, and Canvas submission remain open.
+
+## 16 — Creating a minimal submission folder
+Date: 2026-11-03
+TODO items covered: submission contents (5e–5h).
+
+### What was tried
+- Created handin/ with six source files, data/, results/, requirements.txt, and RUN.txt.
+- Selected only the census images, required disparity results, fish views, three
+  plane renders, and the original/overhead/warped bonus views.
+
+### What worked
+- Included 22 images, both reports, three measurement files, and all four required
+  inputs. No development helpers, optional refinement, caches, or old archives.
+- Standalone imports passed from handin/ using the existing environment. Source
+  and image/report copies match the working repository exactly.
+- Kept installation requirements to NumPy and OpenCV, which are the only external
+  packages imported by the six included source files. Reports are supplied as PDFs.
+
+### What did not work
+- The scene input remains about 267 MiB; omitting it would omit required points.
+- This packaging check did not repeat the full calculation or a clean dependency
+  installation; the unchanged code passed the earlier simplified full run.
+- Final report visual review, course conventions, identification if required,
+  and Canvas submission remain with the student.

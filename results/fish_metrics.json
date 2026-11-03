@@ -1,0 +1,107 @@
+{
+  "scale": 0.5,
+  "width": 1536,
+  "height": 1024,
+  "K": [
+    [
+      1379.75,
+      0.0,
+      760.35
+    ],
+    [
+      0.0,
+      1382.1,
+      503.4
+    ],
+    [
+      0.0,
+      0.0,
+      1.0
+    ]
+  ],
+  "baseline_scene_units": 0.12,
+  "left_translation": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "right_translation": [
+    -0.12,
+    0.0,
+    0.0
+  ],
+  "rotation": [
+    [
+      1.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      1.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      1.0
+    ]
+  ],
+  "scene_depth_range": [
+    3.866280555725098,
+    9.656695365905762
+  ],
+  "geometric_disparity_range": [
+    17.145616976234617,
+    42.82410384182488
+  ],
+  "search_range": [
+    0,
+    44
+  ],
+  "search_minimum_depth": 3.762954545454545,
+  "max_vertical_projection_error": 0.0,
+  "rendered_pixels": [
+    1461612,
+    1435731
+  ],
+  "results": [
+    {
+      "census_size": 3,
+      "aggregation_size": 5,
+      "geometry_reference": {
+        "bad_pixels": 10624,
+        "evaluated_pixels": 1379716,
+        "error_percent": 0.7700135390181747
+      }
+    },
+    {
+      "census_size": 3,
+      "aggregation_size": 9,
+      "geometry_reference": {
+        "bad_pixels": 3108,
+        "evaluated_pixels": 1379716,
+        "error_percent": 0.22526374993114526
+      }
+    },
+    {
+      "census_size": 7,
+      "aggregation_size": 5,
+      "geometry_reference": {
+        "bad_pixels": 4163,
+        "evaluated_pixels": 1379716,
+        "error_percent": 0.3017287615712219
+      }
+    },
+    {
+      "census_size": 7,
+      "aggregation_size": 9,
+      "geometry_reference": {
+        "bad_pixels": 3982,
+        "evaluated_pixels": 1379716,
+        "error_percent": 0.2886101197637775
+      }
+    }
+  ],
+  "seconds": 34.078459028
+}

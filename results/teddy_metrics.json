@@ -1,0 +1,84 @@
+{
+  "results": [
+    {
+      "census_size": 3,
+      "aggregation_size": 5,
+      "common_interior": {
+        "bad_pixels": 24688,
+        "evaluated_pixels": 131311,
+        "error_percent": 18.801166695859447
+      },
+      "valid_known_truth": {
+        "bad_pixels": 38973,
+        "evaluated_pixels": 160440,
+        "error_percent": 24.291323859386686
+      },
+      "full_image_including_invalid": {
+        "bad_pixels": 47235,
+        "evaluated_pixels": 168750,
+        "error_percent": 27.99111111111111
+      },
+      "seconds": 0.94
+    },
+    {
+      "census_size": 3,
+      "aggregation_size": 9,
+      "common_interior": {
+        "bad_pixels": 17262,
+        "evaluated_pixels": 131311,
+        "error_percent": 13.14589029098857
+      },
+      "valid_known_truth": {
+        "bad_pixels": 29740,
+        "evaluated_pixels": 157207,
+        "error_percent": 18.917732670937045
+      },
+      "full_image_including_invalid": {
+        "bad_pixels": 41256,
+        "evaluated_pixels": 168750,
+        "error_percent": 24.448
+      },
+      "seconds": 1.096
+    },
+    {
+      "census_size": 7,
+      "aggregation_size": 5,
+      "common_interior": {
+        "bad_pixels": 16898,
+        "evaluated_pixels": 131311,
+        "error_percent": 12.868685791746312
+      },
+      "valid_known_truth": {
+        "bad_pixels": 29299,
+        "evaluated_pixels": 157207,
+        "error_percent": 18.63721081122342
+      },
+      "full_image_including_invalid": {
+        "bad_pixels": 40805,
+        "evaluated_pixels": 168750,
+        "error_percent": 24.18074074074074
+      },
+      "seconds": 0.966
+    },
+    {
+      "census_size": 7,
+      "aggregation_size": 9,
+      "common_interior": {
+        "bad_pixels": 15255,
+        "evaluated_pixels": 131311,
+        "error_percent": 11.617457791045686
+      },
+      "valid_known_truth": {
+        "bad_pixels": 26635,
+        "evaluated_pixels": 154005,
+        "error_percent": 17.2948930229538
+      },
+      "full_image_including_invalid": {
+        "bad_pixels": 41349,
+        "evaluated_pixels": 168750,
+        "error_percent": 24.50311111111111
+      },
+      "seconds": 0.895
+    }
+  ]
+}

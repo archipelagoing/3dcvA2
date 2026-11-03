@@ -1,0 +1,19 @@
+{
+  "method": "left_right_then_fill",
+  "common_interior": {
+    "bad_pixels": 11392,
+    "evaluated_pixels": 131311,
+    "error_percent": 8.675586965296128
+  },
+  "valid_known_truth": {
+    "bad_pixels": 19873,
+    "evaluated_pixels": 154005,
+    "error_percent": 12.904126489399696
+  },
+  "full_image_including_invalid": {
+    "bad_pixels": 34603,
+    "evaluated_pixels": 168750,
+    "error_percent": 20.505481481481482
+  },
+  "trusted_common_percent": 93.84590780665748
+}
