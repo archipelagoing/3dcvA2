@@ -37,8 +37,11 @@ def PointCloud2Image(K, P, renderer, height, width, w):
     return image
 
 def scale_intrinsics(K, scale=1.0):
-    # fill in code here !!!
-    return K
+    if not np.isfinite(scale) or scale <= 0:
+        raise ValueError("Scale must be positive and finite")
+    scaled = np.asarray(K, dtype=float).copy()
+    scaled[:2] *= scale
+    return scaled
 
 def SampleCameraPath():
     # load object file to retrieve data
