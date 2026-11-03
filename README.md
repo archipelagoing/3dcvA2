@@ -22,7 +22,8 @@ what didn't, and what I learned from it.
 | --- | --- | --- |
 | [A. Teddy stereo](#a-teddy-stereo) | Supplied left/right images and ground truth | Matching, window comparisons, error rates, and refinements |
 | [B. Fish stereo](#b-fish-stereo) | HW1 colored point cloud | Camera geometry, rendering a stereo pair, and reusing the matcher |
-| [C. Checks, setup, and reflection](#c-checks-setup-and-reflection) | Both experiments | Verification, running the code, and lessons/questions |
+| [C. Bonus: planes and homography](#c-bonus-planes-and-homography) | Fish point cloud and fitted ground plane | RANSAC, overhead rendering, and a plane-induced warp |
+| [D. Checks, setup, and reflection](#d-checks-setup-and-reflection) | All experiments | Verification, running the code, and lessons/questions |
 
 ## A. Teddy stereo
 
@@ -46,9 +47,9 @@ a pixel using bits instead of comparing raw brightness values directly.
 
    **Plain English:** Turn the light-and-dark pattern around a pixel into a string of 0s and 1s.
 
-   $$C_I(p)=\operatorname{concat}_{q\in N_c\setminus\{0\}}\mathbf{1}[I(p+q)<I(p)]$$
+   $$C_I(p)=\mathrm{concat}_{q\in N_c\setminus\{0\}}\mathbf{1}[I(p+q)<I(p)]$$
 
-   Here $\operatorname{concat}$ joins the bits into one descriptor. The indicator
+   Here $\mathrm{concat}$ joins the bits into one descriptor. The indicator
    $\mathbf{1}[\cdot]$ is 1 if the comparison is true and 0 otherwise. A 3 × 3
    window gives 8 bits; a 7 × 7 window gives 48.
 
@@ -57,7 +58,7 @@ a pixel using bits instead of comparing raw brightness values directly.
 
    **Plain English:** Try a match and count how many bits disagree.
 
-   $$H(p,d)=\operatorname{popcount}\!\left(C_L(x,y)\;\operatorname{XOR}\;C_R(x-d,y)\right)$$
+   $$H(p,d)=\mathrm{popcount}\!\left(C_L(x,y)\;\mathrm{XOR}\;C_R(x-d,y)\right)$$
 
    XOR marks differing bits; popcount counts them. This is the **Hamming distance**.
    Fewer differing bits means a lower cost, although it does not guarantee the match is right.
@@ -330,19 +331,90 @@ again can't create those missing surfaces, so I left the holes black.
 For grayscale, I used the assignment's weights:
 `round(0.30 R + 0.59 G + 0.11 B)`.
 
-## C. Checks, setup, and reflection
+## C. Bonus: planes and homography
 
-**C1. Central question:** How do I know the result is right, rather than just
+**C1. Central question:** Can I find the ground in the point cloud, then use it
+to turn one image into a view from above? What happens to objects above the ground?
+
+**C2. Tools being tested:** RANSAC finds a plane despite points that don't belong
+to it. A plane-induced homography changes the image viewpoint correctly for
+points on that plane. They solve different parts of the bonus.
+
+### C3. Finding planes with RANSAC
+
+**Plain English:** Pick three points, guess a flat surface, and count how many
+other points sit close to it. Repeat and keep the surface with the most support.
+
+$$n^T X+d=0,\qquad \lVert n\rVert=1,\qquad |n^T X+d|<\tau$$
+
+The first equation describes the plane. The inequality is the inlier rule, with
+threshold $\tau=0.025$ scene units. I used three-point SVD fits, seed 532, and
+30,000 sampled points to score each guess. The trial budget adapts toward 0.999
+sampling confidence, capped at 2,000. I then refined the fit and checked all the
+remaining points, removing each plane's inliers before finding the next one.
+
+| Plane | Inliers | What it picked up |
+| --- | ---: | --- |
+| 1 | 2,356,913 | Background wall |
+| 2 | 854,217 | Ground |
+| 3 | 407,538 | Parts of the fountain facade |
+
+![Ground-plane inliers in green, after removing the first wall plane](docs/images/bonus_ground.png)
+
+The second plane covers the floor. Its unit normal is approximately
+`(0.004634, -0.998713, 0.050514)`, with `d = 1.583236`, in the original camera
+frame. The green result matters here: a normal that points roughly upward is a
+useful clue, but I still checked that the detected points actually cover the ground.
+
+### C4. Rendering from above and warping the original
+
+I placed the second camera 8.9328 scene units above a target on the ground plane,
+with its optical axis pointing along the negative plane normal. The first image
+uses the original camera pose. Both images are 768 × 512.
+
+**Plain English:** Use the ground as a flat sheet and work out where its pixels
+would land in the overhead camera.
+
+$$H=K_B\left(R_B-\frac{t_B n^T}{d}\right)K_A^{-1}$$
+
+This form assumes the first camera is the world frame, as it is here. I used
+inverse mapping and wrote the bilinear interpolation directly: each output pixel
+gets a weighted blend of its four source neighbors.
+
+| Direct 3D render from above | Original image warped using the ground plane |
+| --- | --- |
+| ![Bird's-eye point-cloud render with sparse surfaces and missing geometry](docs/images/bonus_birdseye.png) | ![Ground-plane image warp that stretches the raised fountain](docs/images/bonus_warp.png) |
+
+The ground features line up geometrically, but the fountain doesn't. The warp
+acts as if the fountain is painted onto the floor. The 3D renderer keeps its
+height, but also shows the holes in the original point cloud. A denser-looking
+warp isn't necessarily a more correct view.
+
+The plane-projection check agreed within about `3.84e-13` pixels. That's a check
+of the geometry for points exactly on the plane, not a full-image accuracy score.
+[Parameters, comparison, and checks](results/bonus.md).
+
+```sh
+.venv/bin/python scripts/check_bonus.py
+.venv/bin/python scripts/run_bonus.py
+.venv/bin/python scripts/build_bonus_report.py
+```
+
+The bonus has its own report at `output/pdf/homework2_bonus.pdf`. It is separate
+from the required report so the original one-page explanation remains unchanged.
+
+## D. Checks, setup, and reflection
+
+**D1. Central question:** How do I know the result is right, rather than just
 something that looks convincing or gets a lower score under a different set of rules?
 
-**C2. Tools used to check it:** Small examples with known answers, an independent
+**D2. Tools used to check it:** Small examples with known answers, an independent
 brute-force matching calculation, projection checks, and bad-pixel error rates.
 The small examples check individual steps; the error rates compare final results
 on stated sets of pixels. Saving the inputs, settings, and commands makes those
-checks repeatable. This part checks the work from A and B rather than testing a
-third stereo method.
+checks repeatable. This part checks the experiments rather than testing another stereo method.
 
-The rest covers checks for both problems, how to run the code, what is left,
+The rest covers checks for the required work and bonus, how to run the code, what is left,
 and what I learned from the assignment.
 
 ### 7. How I checked it
@@ -423,6 +495,8 @@ use the cloud's scene units.
 | `output/teddy_improvements/` | Refinement images, original comparison, and `best_metrics.json` |
 | `output/fish/scale_0.5_baseline_0.12/` | Fish views, disparities, depths, masks, and geometry measurements |
 | `output/pdf/homework2_report.pdf` | One explanatory page followed by four figure pages |
+| `output/bonus/` | Plane inlier renders, bird's-eye comparison, and exact parameters |
+| `output/pdf/homework2_bonus.pdf` | Separate bonus explanation and figures |
 | [docs/images/](docs/images/) | Selected output snapshots embedded in this README |
 
 `output/` is generated locally and ignored by Git. The embedded snapshots are
@@ -437,10 +511,27 @@ sequence has not been validated.
 
 #### 9a. Before submitting
 
-The main experiments and report are done. Before submitting, I still need to
-confirm the Teddy evaluation rules and what “quarter resolution” means, review
-the report, add my details if needed, and package the files. Nothing has been
-uploaded to Canvas. I haven't done the optional plane estimation and homography bonus.
+The main experiments and report have been checked, and the complete workflow
+passed both in the repository and in an extracted copy of the submission ZIP.
+The numerical results reproduced exactly, apart from runtimes. The extended
+eleven-stage run including bonus checks, rendering, and report generation also
+passed. Use `scripts/verify_workflow.py --bonus` to repeat that extended run.
+
+The required-only package is `output/submission/homework2_submission.zip`.
+The version including the bonus is `output/submission/homework2_submission_with_bonus.zip`.
+It includes source, course inputs, separate output folders, the report, run
+instructions, and a checksum manifest. Archive checks, file hashes, and image
+decoding passed. To repeat the workflow locally:
+
+```sh
+.venv/bin/python scripts/verify_workflow.py
+```
+
+I still need to confirm the Teddy evaluation rules, the meaning of “quarter
+resolution,” and Canvas upload requirements, then add my details if required and
+submit. Nothing has been uploaded to Canvas. The optional plane estimation and
+homography bonus is now implemented and documented separately.
+
 
 #### 9b. Notes and assignment files
 
@@ -502,3 +593,9 @@ The left/right check worked best on Teddy, while the rendered fish pair was much
 easier to match on its visible surfaces. I'd want to try another real stereo pair
 before assuming the same settings are generally better. The next comparison
 should keep the evaluation rules fixed from the start.
+
+#### 10i. Bonus: when does a flat-image warp stop working?
+
+The bird's-eye comparison made this clear. The ground can follow one homography,
+but the raised fountain can't. I'd like to see whether separate planes would
+improve the result, and where missing geometry would still make a full 3D model necessary.

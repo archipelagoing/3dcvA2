@@ -288,3 +288,114 @@ TODO items covered: 3a–3l, 4f–4g, partial 4h. Task 3b remains open for confi
   documented assumption; the alternate scale is configurable but was not run on
   the real scene this session. Task 3b stays open.
 - Full individual artifact review, the final report, and submission remain unfinished.
+
+## 11 — Reconciling the checklist with completed work
+Date: 2026-11-03
+TODO items covered: 4h, 5a–5d; reviewed remaining status in 2k, 3b, 4i, 5e–5i, and section 6.
+
+### What was tried
+- Compared the checklist with the existing report, recorded image checks, and
+  prior visual review. The checklist had remained unchanged during the earlier
+  request to leave Markdown files untouched.
+- Updated the stale status descriptions and README's completion wording.
+
+### What worked
+- Confirmed `output/pdf/homework2_report.pdf` exists. The previously reviewed
+  five-page report has one explanatory page and four figure pages containing
+  the required Teddy and fish results. Marked 5a–5d complete.
+- The previous PDF-page review covered all census/stereo/disparity figures;
+  `output/report_review.json` records additional checks of 36 output images.
+  Marked 4h complete using that existing evidence, not a newly claimed run.
+- Updated next steps to complete workflow verification, resolve course conventions,
+  and build and review the submission package.
+
+### What did not work
+- Checklist status had fallen behind the implementation and report work. This
+  entry reconciles that history; it does not claim those stages ran this session.
+- The assignment remains unfinished: 2k and 3b await confirmation, 4i has no single
+  complete-run verification, and 5e–5i await packaging, review, and submission.
+- PDF review alone does not complete 5h because the packaged files do not yet
+  exist. The optional bonus remains unimplemented. No upload was performed.
+
+## 12 — Verifying the workflow and preparing the submission ZIP
+Date: 2026-11-03
+TODO items covered: 4i, 5e–5h; course confirmation and 5i handed back to the student.
+
+### What was tried
+- Added `scripts/verify_workflow.py` to run all eight documented stages in order
+  with per-stage logs and a machine-readable result file.
+- Rebuilt the PDF and rendered all pages; compared them with the reviewed page images.
+- Added `scripts/package_submission.py` and built the local ZIP with source,
+  trusted inputs, separate output directories, report, run instructions, and hashes.
+- Extracted the ZIP and reran the entire workflow using the existing Python
+  environment, then compared numerical metrics with the repository results.
+
+### What worked
+- Both complete runs passed all eight stages. The extracted copy reproduced
+  Teddy, refinement, and fish numerical metrics exactly, excluding runtimes.
+- All five rebuilt report pages matched the reviewed renderings pixel for pixel.
+- Created `output/submission/homework2_submission.zip`: about 142.5 MiB, with
+  85 hashed files plus the manifest. CRC, hashes, and image decoding passed.
+  No installed environments, caches, or machine clutter were included.
+- Marked 4i, 5e, 5g, and 5h complete. Source and output directories satisfy the
+  local portion of 5f; its Canvas-organization confirmation remains open.
+- Evidence is under `output/verification/`, including `workflow.json`, stage logs,
+  and `package_check.json`. Updated README and TODO to reflect the actual handoff.
+
+### What did not work
+- Browser access was unavailable and native Chrome inspection timed out. Before
+  the student asked to handle external checks personally, a connected email search
+  found no matching course clarification. No messages were sent or files uploaded.
+- Per the student's instruction, further course and Canvas checking stopped.
+  Tasks 2k, 3b, the Canvas portion of 5f, and 5i remain for the student.
+- The extracted verification reused the installed environment; it does not prove
+  dependency installation on a different machine. Physical units and course
+  assumptions remain documented, not independently confirmed.
+- Student identification is not filled into the report. Add it if the course
+  requires it. No bonus or video is included; the required stereo results are images.
+
+## 13 — Completing the plane and homography bonus
+Date: 2026-11-03
+TODO items covered: 6a–6k; extended verification and refreshed bonus-inclusive packaging.
+
+### What was tried
+- Implemented three-point SVD plane hypotheses, RANSAC consensus scoring, covariance
+  refinement, and sequential inlier removal in `src/planes.py` and `scripts/run_bonus.py`.
+- Used threshold 0.025 scene units, seed 532, 30,000 sampled remaining points,
+  adaptive confidence target 0.999, and a 2,000-trial cap.
+- Selected the ground by orientation/position and confirmed it in the green render.
+- Positioned a bird's-eye camera along the ground normal, rendered both poses,
+  derived H from n.X+d=0, and implemented inverse bilinear warping manually.
+- Ran synthetic checks, deterministic reruns, all eleven extended-workflow stages,
+  rendered and reviewed the separate bonus PDF, and verified the packaged bonus.
+
+### What worked
+- Three planes had 2,356,913, 854,217, and 407,538 inliers. The second is the floor.
+  Green renders show the wall, ground, and fountain-facade consensus with previous
+  planes removed. Ground n=(0.00463422,-0.99871259,0.05051415), d=1.58323646.
+- The second camera looks along -n from 8.93276 scene units above a ground target.
+  Image B and warped A are saved separately and side by side under `output/bonus/`.
+- Exact on-plane points agreed between H and direct projection within 3.84e-13 pixels.
+  Tests passed for exact/noisy planes, outliers, degenerate samples, proper rotations,
+  homography sign, and identity/translated/half-pixel interpolation examples.
+- All eleven stages of `scripts/verify_workflow.py --bonus` passed. The three-page
+  `output/pdf/homework2_bonus.pdf` was rendered and visually reviewed. The required
+  report is unchanged; all explanation for the bonus is on its own first page.
+- Created `output/submission/homework2_submission_with_bonus.zip` (147.8 MiB).
+  CRC, 104 hashes, and image decoding passed. An extracted copy reran all three
+  bonus commands and reproduced exact parameters and PNG bytes. Verification is
+  recorded in `output/verification/bonus_package_check.json`.
+- Checked all section 6 items, added the bonus explanation and images to README,
+  and recorded details in `results/bonus.md`. Preserved the required-only archive.
+
+### What did not work
+- The bird's-eye render contains large holes and sparse surfaces because the
+  single-view cloud lacks newly visible geometry. No invented geometry or hole
+  filling was used to disguise this limitation.
+- The ground homography stretches the raised fountain onto the floor. It cannot
+  reproduce off-plane parallax, object height, or visibility changes. The comparison
+  documents this expected limitation rather than claiming whole-image agreement.
+- RANSAC's confidence target is a sampling heuristic subject to a trial cap and
+  the chosen threshold; it is not proof that a visually meaningful plane was found.
+- No new runtime/test failures occurred. Course conventions and Canvas submission
+  remain with the student; no external checking or upload was performed.

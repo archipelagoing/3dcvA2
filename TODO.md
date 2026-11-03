@@ -7,21 +7,27 @@ Last updated: 2026-11-03.
 This repository contains the CS 532 Homework 2 handouts, Teddy stereo inputs,
 and an Open3D rendering starter script. The assignment requires census-transform
 stereo matching on Teddy (40 points) and on a rendered fish scene (60 points).
-The optional bonus covers plane estimation and homography warping.
+The optional bonus covers plane estimation and homography warping and is now
+implemented, tested, and documented in a separate report.
 
 The inputs have been inspected and the fish scene recovered from HW1. A Python
 3.12 environment and pinned dependency manifest are present. Teddy and fish stereo
 are implemented and evaluated. The NumPy CPU renderer is verified on this Mac;
 Open3D offscreen rendering remains unsupported. Intrinsic scaling is implemented.
-The fish input is at `data/data.obj`. Final artifact review and the report remain
-unfinished; course conventions still need confirmation.
+The fish input is at `data/data.obj`. Output review and the five-page report are
+complete under the documented assumptions. The assignment is not finished:
+course conventions need confirmation by the student. The complete workflow
+passed, and the local submission ZIP passed archive and extracted-run verification.
+Canvas checks and submission are reserved for the student.
 
 ## Next steps
 
 1. Confirm Teddy evaluation-mask conventions for the final report (2k).
-2. Confirm the resolution interpretation (3b) and finish artifact review (4h).
-3. Prepare the report and submission files (section 5).
-4. Attempt the bonus only after the required work is complete.
+2. Confirm the resolution interpretation (3b).
+3. Student: confirm Canvas upload organization and add identification if required (5f).
+4. Student: submit the verified files through Canvas and check the receipt (5i).
+5. Use the bonus-inclusive ZIP if submitting section 6; retain the required-only
+   package as a separate artifact.
 
 ## Reference files and constraints
 
@@ -133,54 +139,91 @@ sequence remains separate and unverified.
 - [x] 4e — Verify ground-truth conversion and bad-pixel threshold on known values.
 - [x] 4f — Check stereo rectification by comparing vertical coordinates of projected points.
 - [x] 4g — Verify resized intrinsics preserve the field of view.
-- [ ] 4h — Inspect all saved census images, stereo views, and disparity maps for scaling,
+- [x] 4h — Inspect all saved census images, stereo views, and disparity maps for scaling,
       cropping, color-order, and invalid-region problems.
-- [ ] 4i — Run the complete workflow from documented commands and retain measured results.
+- [x] 4i — Run the complete workflow from documented commands and retain measured results.
 
 Progress (2026-11-03): `scripts/check_stereo.py` passed census, Hamming,
 aggregation, identical/shifted inputs, borders, independent brute-force WTA, and
-bad-pixel threshold checks. All four Teddy disparity views and both left census
-visualizations were inspected. Fish geometry checks also passed (4f–4g); both fish RGB views and the (3,9)
-disparity view were inspected. Task 4h remains open for the remaining images;
-4i remains open for the complete assignment workflow.
+bad-pixel threshold checks. Fish geometry checks also passed (4f–4g).
+All four Teddy census visualizations, four Teddy disparity views, both fish
+RGB/grayscale views, and four fish disparity views were reviewed in the rendered
+report. Automated checks covered 36 saved images: dimensions, binary masks,
+disparity ranges, grayscale conversion, and census borders. Evidence is recorded
+in `output/report_review.json`. Tasks 4h–4i are complete. `scripts/verify_workflow.py` ran all eight stages
+in order successfully; the optional `--bonus` extension also passed all eleven
+stages. Exit codes, timings, and individual logs are saved under
+`output/verification/`. The rebuilt PDF pages match the reviewed pages exactly.
 
 ## 5. Report and submission
 
-- [ ] 5a — Include both Teddy census visualizations and the required appearance discussion.
-- [ ] 5b — Include four Teddy disparity maps and their bad-pixel percentages.
-- [ ] 5c — Include fish disparity results and justify baseline, disparity range, and
+- [x] 5a — Include both Teddy census visualizations and the required appearance discussion.
+- [x] 5b — Include four Teddy disparity maps and their bad-pixel percentages.
+- [x] 5c — Include fish disparity results and justify baseline, disparity range, and
       corresponding depth limits.
-- [ ] 5d — Keep explanatory text to at most one page, as specified by the handout.
-- [ ] 5e — Package source code excluding libraries, points used in computation, resulting
+- [x] 5d — Keep explanatory text to at most one page, as specified by the handout.
+- [x] 5e — Package source code excluding libraries, points used in computation, resulting
       images, and the PDF report into the requested ZIP submission.
 - [ ] 5f — Include code and output images/videos separately as requested; confirm Canvas
-      upload organization if the handout's wording is unclear.
-- [ ] 5g — Verify the submission contains required inputs and reproducible instructions,
+      upload organization (local source/output directories are packaged; remaining
+      Canvas confirmation is delegated to the student).
+- [x] 5g — Verify the submission contains required inputs and reproducible instructions,
       and excludes environment folders and machine-specific clutter.
-- [ ] 5h — Review the final PDF and open the packaged images/videos before submission.
+- [x] 5h — Review the final PDF and open the packaged images/videos before submission
+      (PDF reviewed; packaged images decoded and checksums matched reviewed originals).
 - [ ] 5i — Submit through Canvas and verify the uploaded files and receipt.
 
-Progress: No report or submission package exists. Listing submission here does
-not perform or authorize an upload.
+Progress (2026-11-03): `output/pdf/homework2_report.pdf` exists and contains
+one page of explanation/results followed by four figure pages. It includes
+census visualizations and discussion, all four Teddy disparity maps/error rates,
+and the fish views/maps with baseline, calibration, disparity range, and depth
+justification. All five rendered PDF pages were visually reviewed; no clipping
+was found. Rebuild with `scripts/build_report.py`. Tasks 5a–5d are complete.
+The report retains the assumptions pending 2k/3b; revise it if course guidance
+changes them and add student identification if required. Built `output/submission/homework2_submission.zip` (142.5 MiB), containing
+source directories, required course inputs, separate generated outputs, the PDF,
+RUNNING.txt instructions, workflow logs, and a SHA-256 manifest. CRC and all
+85 packaged-file hashes passed; all packaged images decoded successfully.
+The extracted-copy workflow passed all eight stages and reproduced numerical
+metrics exactly (excluding runtimes). Evidence: `output/verification/package_check.json`.
+The rebuilt PDF rendered identically to the reviewed five pages. Tasks 5e, 5g,
+and 5h are complete. Task 5f is locally prepared but awaits student confirmation
+of Canvas organization. Nothing has been uploaded.
+Per the latest instruction, course confirmation and Canvas submission are for
+the student to handle.
 
 ## 6. Optional bonus — Plane estimation and homography
 
-- [ ] 6a — Implement RANSAC plane estimation using three 3D points per minimal sample;
+- [x] 6a — Implement RANSAC plane estimation using three 3D points per minimal sample;
       obtain plane parameters from their homogeneous-coordinate null space.
-- [ ] 6b — Explain the distance threshold, iteration budget, sampling, and inlier criteria.
-- [ ] 6c — Recolor detected inliers green and render a result image.
-- [ ] 6d — Remove those inliers and repeat twice to obtain three plane-result images.
-- [ ] 6e — Continue if necessary until one detected plane is the ground plane.
-- [ ] 6f — Report the ground plane parameters `(n, d)` and their coordinate convention.
-- [ ] 6g — Render image A from a chosen pose `[Ra, ta]`.
-- [ ] 6h — Select a bird's-eye pose `[Rb, tb]` with optical axis parallel to the ground
+- [x] 6b — Explain the distance threshold, iteration budget, sampling, and inlier criteria.
+- [x] 6c — Recolor detected inliers green and render a result image.
+- [x] 6d — Remove those inliers and repeat twice to obtain three plane-result images.
+- [x] 6e — Continue if necessary until one detected plane is the ground plane.
+- [x] 6f — Report the ground plane parameters `(n, d)` and their coordinate convention.
+- [x] 6g — Render image A from a chosen pose `[Ra, ta]`.
+- [x] 6h — Select a bird's-eye pose `[Rb, tb]` with optical axis parallel to the ground
       plane normal and suitable framing, then render image B.
-- [ ] 6i — Compute the plane-induced homography and warp image A into B's viewpoint.
-- [ ] 6j — Account for the coordinate frame in which the plane and camera poses are defined.
-- [ ] 6k — Compare rendered B and warped A side by side and explain differences.
+- [x] 6i — Compute the plane-induced homography and warp image A into B's viewpoint.
+- [x] 6j — Account for the coordinate frame in which the plane and camera poses are defined.
+- [x] 6k — Compare rendered B and warped A side by side and explain differences.
 
-Progress: Optional and not started. Requires the recovered HW1 scene and a working
-renderer; prioritize the 100-point core assignment first.
+Progress (2026-11-03): All bonus steps are implemented in `src/planes.py` and
+`scripts/run_bonus.py`. Detected three sequential planes with 2,356,913; 854,217;
+and 407,538 inliers. The second is the visually confirmed ground. Its unit plane
+is n=(0.00463422,-0.99871259,0.05051415), d=1.58323646 in the original camera
+frame. Green inlier renders show earlier planes removed. Rendered image A and a
+bird's-eye image B, implemented plane-induced H and manual bilinear inverse
+warping, and saved a side-by-side comparison. Exact plane-point projection agrees
+to 3.84e-13 pixels. Tests, deterministic rerun, and all eleven full-workflow stages
+passed. Three bonus PDF pages were visually reviewed. See `results/bonus.md`,
+`output/bonus/metrics.json`, and `output/pdf/homework2_bonus.pdf`.
+The overhead render has missing surfaces and sparse points; the homography
+incorrectly flattens off-plane fountain geometry. These are explained rather than
+hidden. `output/submission/homework2_submission_with_bonus.zip` (147.8 MiB)
+passed CRC, all 104 file hashes, and image decoding. An extracted copy reran the
+bonus checks, rendering, and report successfully, reproducing exact metrics and
+PNG bytes. Evidence: `output/verification/bonus_package_check.json`.
 
 ## Blockers and decisions
 
@@ -195,6 +238,17 @@ renderer; prioritize the 100-point core assignment first.
 - **Open question:** Confirm evaluation-mask conventions for Teddy where the
   handout does not explicitly define them.
 - **Open question:** Confirm the deadline and submission organization in Canvas.
+- **Bonus completion (2026-11-03):** Section 6 is complete. Extended eleven-stage
+  workflow passed; bonus-inclusive ZIP and extracted bonus reproduction passed.
+  The required-only ZIP is preserved separately.
+- **Local package verification (2026-11-03):** All eight workflow stages passed
+  in the repository and extracted ZIP; metrics reproduced. Archive path:
+  `output/submission/homework2_submission.zip` (142.5 MiB).
+- **Student handoff (2026-11-03):** Course convention checks, Canvas requirements,
+  identification if required, and submission are reserved for the student.
+- **Status reconciliation (2026-11-03):** Updated previously frozen checklist
+  entries against the existing report and review evidence; unfinished validation,
+  packaging, submission, and optional bonus tasks remain open.
 - **Decision (2026-11-03):** Use `TODO.md` as the single project checklist,
   replacing the generic `todoSimple.md` template.
 
