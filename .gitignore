@@ -218,3 +218,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local scene data and generated outputs
+data/
+output/
+.DS_Store
